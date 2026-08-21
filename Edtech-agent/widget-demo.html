@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo: Edy Widget en SaaS</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+
+    .dashboard {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .dashboard h2 {
+      color: #1f2937;
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+
+    .courses-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .course-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .course-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .course-card h3 {
+      color: #1f2937;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .course-card p {
+      color: #6b7280;
+      font-size: 14px;
+      margin-bottom: 15px;
+      line-height: 1.5;
+    }
+
+    .course-card .price {
+      color: #3b82f6;
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .info-box {
+      background: #f3f4f6;
+      border-left: 4px solid #3b82f6;
+      padding: 20px;
+      border-radius: 6px;
+      margin-top: 30px;
+    }
+
+    .info-box h3 {
+      color: #1f2937;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .info-box p {
+      color: #6b7280;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .note {
+      background: #dbeafe;
+      border: 1px solid #93c5fd;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: #1e40af;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📚 Mi Plataforma EdTech</h1>
+      <p>Explora cursos y habla con Edy en tiempo real</p>
+    </div>
+
+    <div class="dashboard">
+      <h2>Cursos Disponibles</h2>
+
+      <div class="courses-grid">
+        <div class="course-card">
+          <h3>Deep Learning</h3>
+          <p>Aprende redes neuronales y modelos de IA avanzados con proyectos reales.</p>
+          <div class="price">$99.99</div>
+        </div>
+
+        <div class="course-card">
+          <h3>Curso de Python</h3>
+          <p>Desde lo básico hasta programación avanzada con ejemplos prácticos.</p>
+          <div class="price">$49.99</div>
+        </div>
+
+        <div class="course-card">
+          <h3>Azure Foundry</h3>
+          <p>Domina la plataforma cloud de Microsoft con casos de uso empresariales.</p>
+          <div class="price">$79.99</div>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <h3>💬 ¿Necesitas ayuda?</h3>
+        <p>
+          Haz clic en el botón flotante abajo a la derecha para hablar con <strong>Edy</strong>,
+          nuestro asistente de voz IA. Puedes preguntar sobre cursos, inscribirte directamente
+          o resolver cualquier duda.
+        </p>
+
+        <div class="note">
+          <strong>Nota:</strong> Este es un demo del widget. En un navegador con acceso a
+          <strong>meet.livekit.io</strong>, el widget se conectará a Edy en tiempo real.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edy Widget (embebido en la página) -->
+  <edy-voice-widget
+    livekit-url="wss://tu-proyecto.livekit.cloud"
+    api-key="tu-api-key"
+    api-secret="tu-api-secret"
+    room="edtech-widget">
+  </edy-voice-widget>
+
+  <!-- Script del widget -->
+  <script src="edy-widget.js"></script>
+
+  <script>
+    // Log de demostración
+    console.log('%cEdy Widget cargado ✅', 'color: green; font-weight: bold;');
+    console.log('El widget flotante está listo. Haz clic en el botón 🎤 para hablar con Edy.');
+  </script>
+</body>
+</html>
