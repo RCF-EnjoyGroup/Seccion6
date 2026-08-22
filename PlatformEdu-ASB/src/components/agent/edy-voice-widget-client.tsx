@@ -32,6 +32,8 @@ export default function EdyVoiceWidget({
   const [error, setError] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [transcript, setTranscript] = useState<Message[]>([]);
+  const [textInput, setTextInput] = useState("");
+  const [sendingText, setSendingText] = useState(false);
 
   const roomRef = useRef<Room | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
@@ -78,8 +80,51 @@ export default function EdyVoiceWidget({
     setConnected(false);
     setConnecting(false);
     setSpeaking(false);
+    setTextInput("");
     hasConnectedRef.current = false;
   }, []);
+
+  // Enviar mensaje de texto al agente usando el topic "lk.chat"
+  // que el SDK del agente escucha nativamente
+  const sendTextMessage = useCallback(
+    async (text: string) => {
+      const r = roomRef.current;
+      if (!r || !connected) {
+        console.warn("[EdyWidget] Cannot send text: not connected");
+        return;
+      }
+
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      // Mostrar en el chat del usuario
+      addMessage("user", trimmed);
+      setSendingText(true);
+
+      try {
+        // Usar sendText con topic "lk.chat" — el SDK del agente
+        // escucha este topic nativamente y procesa el mensaje
+        await r.localParticipant.sendText(trimmed, { topic: "lk.chat" });
+        console.log("[EdyWidget] Text sent via lk.chat:", trimmed);
+      } catch (err) {
+        console.error("[EdyWidget] Failed to send text:", err);
+        // Fallback: intentar con publishData
+        try {
+          const payload = new TextEncoder().encode(
+            JSON.stringify({ type: "user_text", text: trimmed })
+          );
+          await r.localParticipant.publishData(payload, { reliable: true });
+          console.log("[EdyWidget] Text sent via publishData fallback:", trimmed);
+        } catch (fallbackErr) {
+          console.error("[EdyWidget] Fallback also failed:", fallbackErr);
+        }
+      } finally {
+        setTextInput("");
+        setSendingText(false);
+      }
+    },
+    [connected, addMessage],
+  );
 
   const connect = useCallback(async () => {
     if (hasConnectedRef.current || connecting) {
@@ -129,10 +174,9 @@ export default function EdyVoiceWidget({
           if (data.type === "agent_speech" && data.text) {
             console.log("[EdyWidget] Agent speech from", participant?.identity, ":", data.text);
             addMessage("ady", data.text);
-            // La voz la sintetiza ElevenLabs via LiveKit audio track, no usar speechSynthesis
           }
         } catch (e) {
-          console.error("[EdyWidget] Failed to parse data packet:", e);
+          // Paquetes que no son JSON válido, ignorar
         }
       });
 
@@ -161,7 +205,6 @@ export default function EdyVoiceWidget({
 
       r.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
         console.log("[EdyWidget] Participant connected:", participant.identity);
-        // Suscribirse a pistas ya publicadas por el agente si entra después
         for (const pub of participant.trackPublications.values()) {
           if (pub.kind === Track.Kind.Audio && !pub.isSubscribed) {
             pub.setSubscribed(true);
@@ -186,7 +229,7 @@ export default function EdyVoiceWidget({
         console.log("[EdyWidget] Connection state:", state);
       });
 
-      // Detectar cuando el agente está hablando (lo usa el indicador visual)
+      // Detectar cuando el agente está hablando (indicador visual)
       r.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
         const isAgentSpeaking = speakers.some((s) => s.identity !== r.localParticipant.identity);
         setSpeaking(isAgentSpeaking);
@@ -215,7 +258,6 @@ export default function EdyVoiceWidget({
         console.log("[EdyWidget] Published track:", track.kind);
       }
 
-      // Hook para detectar cuando el usuario habla (transcripción futura)
       r.localParticipant.on(ParticipantEvent.IsSpeakingChanged, (isSpeaking: boolean) => {
         if (isSpeaking) console.log("[EdyWidget] User is speaking...");
       });
@@ -328,9 +370,9 @@ export default function EdyVoiceWidget({
 
           {connected && transcript.length === 0 && (
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>🎙️ Habla con Edy para buscar cursos o inscribirte</p>
+              <p>🎙️ Habla con Edy o escribe un mensaje para buscar cursos</p>
               <p className="text-xs text-muted-foreground/70">
-                {'Ejemplos: "Quiero un curso de programación", "Muéstrame cursos gratis", "Inscríbeme en el primero"'}
+                {"Ejemplos: \"Quiero un curso de programación\", \"Muéstrame cursos gratis\", \"Inscríbeme en el primero\""}
               </p>
             </div>
           )}
@@ -355,6 +397,40 @@ export default function EdyVoiceWidget({
             </div>
           )}
         </div>
+
+        {/* Input de texto para escribir mensajes */}
+        {connected && (
+          <div className="border-t border-border p-3">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (textInput.trim() && !sendingText) {
+                  sendTextMessage(textInput);
+                }
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder="Escribe un mensaje..."
+                disabled={sendingText}
+                className="flex-1 bg-muted/50 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={sendingText || !textInput.trim()}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendingText ? "..." : "Enviar"}
+              </button>
+            </form>
+            <p className="text-[10px] text-muted-foreground/50 mt-1 text-center">
+              También puedes usar el micrófono 🎙️
+            </p>
+          </div>
+        )}
 
         {connected && (
           <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground/70">

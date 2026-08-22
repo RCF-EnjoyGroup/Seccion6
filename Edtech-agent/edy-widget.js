@@ -4,19 +4,44 @@
  * Uso:
  * <edy-voice-widget
  *   livekit-url="wss://..."
- *   api-key="..."
- *   api-secret="..."
- *   room="edtech-widget">
+ *   api-url="/api/agent/token"
+ *   room="edtech-widget"
+ *   student-id="optional-student-id">
  * </edy-voice-widget>
  * <script src="edy-widget.js"></script>
+ *
+ * Requiere livekit-client cargado globalmente o por CDN:
+ * <script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js"></script>
  */
 
 class EdyVoiceWidget extends HTMLElement {
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
-    this.isConnected_ = false;
+    this.attachShadow({ mode: "open" });
     this.room = null;
+    this.audioEl = null;
+    this.connected = false;
+    this.transcript = [];
+  }
+
+  static get observedAttributes() {
+    return ["livekit-url", "api-url", "room", "student-id"];
+  }
+
+  get livekitUrl() {
+    return this.getAttribute("livekit-url") || "wss://edutech-meo77bh3.livekit.cloud";
+  }
+
+  get apiUrl() {
+    return this.getAttribute("api-url") || "/api/agent/token";
+  }
+
+  get roomName() {
+    return this.getAttribute("room") || "edtech-widget";
+  }
+
+  get studentId() {
+    return this.getAttribute("student-id") || "";
   }
 
   async connectedCallback() {
@@ -24,299 +49,513 @@ class EdyVoiceWidget extends HTMLElement {
     this.attachEventListeners();
   }
 
+  disconnectedCallback() {
+    this.disconnect();
+  }
+
   render() {
-    const style = `
-      :host {
-        --primary-color: #3b82f6;
-        --bg-color: #ffffff;
-      }
-
-      .edy-container {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 80px;
-        height: 80px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      }
-
-      .edy-button {
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--primary-color), #1e40af);
-        border: none;
-        color: white;
-        font-size: 24px;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .edy-button:hover {
-        transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
-      }
-
-      .edy-button.listening {
-        animation: pulse 1.5s infinite;
-      }
-
-      @keyframes pulse {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.05); opacity: 0.8; }
-      }
-
-      .edy-modal {
-        display: none;
-        position: fixed;
-        bottom: 100px;
-        right: 20px;
-        width: 350px;
-        max-width: 90vw;
-        background: var(--bg-color);
-        border-radius: 12px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-        z-index: 9998;
-        animation: slideUp 0.3s ease;
-      }
-
-      .edy-modal.open {
-        display: flex;
-        flex-direction: column;
-      }
-
-      @keyframes slideUp {
-        from { transform: translateY(20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-      }
-
-      .edy-header {
-        padding: 16px;
-        border-bottom: 1px solid #e5e7eb;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .edy-header h3 {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: #1f2937;
-      }
-
-      .edy-close {
-        background: none;
-        border: none;
-        font-size: 20px;
-        cursor: pointer;
-        color: #6b7280;
-      }
-
-      .edy-content {
-        flex: 1;
-        padding: 16px;
-        min-height: 200px;
-        max-height: 400px;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .edy-message {
-        padding: 10px 12px;
-        border-radius: 8px;
-        font-size: 14px;
-        line-height: 1.4;
-      }
-
-      .edy-message.user {
-        background: var(--primary-color);
-        color: white;
-        align-self: flex-end;
-        max-width: 80%;
-      }
-
-      .edy-message.edy {
-        background: #f3f4f6;
-        color: #1f2937;
-        align-self: flex-start;
-        max-width: 80%;
-      }
-
-      .edy-message.error {
-        background: #fee2e2;
-        color: #dc2626;
-        text-align: center;
-      }
-
-      .edy-footer {
-        padding: 12px 16px;
-        border-top: 1px solid #e5e7eb;
-        display: flex;
-        gap: 8px;
-      }
-
-      .edy-input {
-        flex: 1;
-        padding: 8px 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        font-size: 14px;
-      }
-
-      .edy-input:focus {
-        outline: none;
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-      }
-
-      .edy-send {
-        background: var(--primary-color);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        width: 36px;
-        height: 36px;
-        cursor: pointer;
-        font-size: 16px;
-      }
-
-      .edy-send:hover {
-        background: #1e40af;
-      }
-
-      .edy-status {
-        font-size: 12px;
-        color: #6b7280;
-        text-align: center;
-        padding: 8px;
-      }
-
-      .edy-status.connected {
-        color: #10b981;
-      }
-
-      .edy-status.error {
-        color: #dc2626;
-      }
-    `;
-
     this.shadowRoot.innerHTML = `
-      <style>${style}</style>
+      <style>
+        :host {
+          --primary: #3b82f6;
+          --primary-hover: #2563eb;
+          --bg: #ffffff;
+          --bg-muted: #f9fafb;
+          --border: #e5e7eb;
+          --text: #111827;
+          --text-muted: #6b7280;
+          --green: #10b981;
+          --red: #ef4444;
+          --yellow: #f59e0b;
+        }
+
+        .edy-container {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          width: 380px;
+          max-width: 90vw;
+          max-height: 80vh;
+          z-index: 9999;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          display: none;
+          flex-direction: column;
+          background: var(--bg);
+          border-radius: 12px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+          overflow: hidden;
+          animation: slideUp 0.3s ease;
+        }
+
+        .edy-container.open {
+          display: flex;
+        }
+
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+
+        .edy-header {
+          padding: 14px 16px;
+          border-bottom: 1px solid var(--border);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: var(--bg-muted);
+        }
+
+        .edy-header-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .edy-status-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: var(--red);
+          transition: background 0.3s;
+        }
+
+        .edy-status-dot.connected { background: var(--green); }
+        .edy-status-dot.connecting { background: var(--yellow); animation: pulse 1.5s infinite; }
+        .edy-status-dot.speaking { background: var(--primary); animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+
+        .edy-header h3 {
+          margin: 0;
+          font-size: 15px;
+          font-weight: 600;
+          color: var(--text);
+        }
+
+        .edy-close {
+          background: none;
+          border: none;
+          font-size: 20px;
+          cursor: pointer;
+          color: var(--text-muted);
+          padding: 4px;
+        }
+
+        .edy-close:hover { color: var(--text); }
+
+        .edy-content {
+          flex: 1;
+          padding: 12px 16px;
+          min-height: 180px;
+          max-height: 360px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .edy-msg {
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-size: 13px;
+          line-height: 1.5;
+          max-width: 85%;
+          word-wrap: break-word;
+        }
+
+        .edy-msg.user {
+          background: var(--primary);
+          color: white;
+          align-self: flex-end;
+        }
+
+        .edy-msg.agent {
+          background: var(--bg-muted);
+          color: var(--text);
+          align-self: flex-start;
+          border: 1px solid var(--border);
+        }
+
+        .edy-msg.error {
+          background: #fef2f2;
+          color: var(--red);
+          text-align: center;
+          align-self: center;
+          max-width: 100%;
+        }
+
+        .edy-msg .sender {
+          font-size: 10px;
+          font-weight: 600;
+          opacity: 0.7;
+          margin-bottom: 2px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .edy-status {
+          font-size: 12px;
+          color: var(--text-muted);
+          text-align: center;
+          padding: 8px 16px;
+          border-top: 1px solid var(--border);
+        }
+
+        .edy-status.connected { color: var(--green); }
+
+        .edy-footer {
+          padding: 10px 16px;
+          border-top: 1px solid var(--border);
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .edy-input {
+          flex: 1;
+          padding: 8px 12px;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          font-size: 13px;
+          color: var(--text);
+          background: var(--bg);
+          outline: none;
+          transition: border-color 0.2s;
+        }
+
+        .edy-input:focus {
+          border-color: var(--primary);
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .edy-input:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .edy-send {
+          background: var(--primary);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          width: 36px;
+          height: 36px;
+          cursor: pointer;
+          font-size: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s;
+          flex-shrink: 0;
+        }
+
+        .edy-send:hover { background: var(--primary-hover); }
+        .edy-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .edy-hint {
+          font-size: 10px;
+          color: var(--text-muted);
+          text-align: center;
+          padding: 4px 16px 8px;
+          opacity: 0.6;
+        }
+
+        /* Botón flotante */
+        .edy-fab {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, var(--primary), #1e40af);
+          border: none;
+          color: white;
+          font-size: 28px;
+          cursor: pointer;
+          box-shadow: 0 4px 16px rgba(59, 130, 246, 0.45);
+          transition: transform 0.2s, box-shadow 0.2s;
+          z-index: 9998;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .edy-fab:hover {
+          transform: scale(1.08);
+          box-shadow: 0 6px 24px rgba(59, 130, 246, 0.6);
+        }
+
+        .edy-fab.hidden { display: none; }
+      </style>
+
+      <button class="edy-fab" title="Habla con Edy">🎙️</button>
+
       <div class="edy-container">
-        <button class="edy-button" title="Habla con Edy">🎤</button>
-
-        <div class="edy-modal">
-          <div class="edy-header">
-            <h3>Edy - Asistente de Cursos</h3>
-            <button class="edy-close">×</button>
+        <div class="edy-header">
+          <div class="edy-header-left">
+            <div class="edy-status-dot" id="statusDot"></div>
+            <h3>Edy — Asistente de Cursos</h3>
           </div>
+          <button class="edy-close" title="Cerrar">✕</button>
+        </div>
 
-          <div class="edy-content"></div>
+        <div class="edy-content" id="content"></div>
 
-          <div class="edy-status">
-            Conectando...
-          </div>
+        <div class="edy-status" id="statusBar">Iniciando...</div>
 
-          <div class="edy-footer">
-            <input
-              type="text"
-              class="edy-input"
-              placeholder="O escribe aquí..."
-              disabled>
-            <button class="edy-send" disabled>↓</button>
-          </div>
+        <div class="edy-footer">
+          <input
+            type="text"
+            class="edy-input"
+            id="textInput"
+            placeholder="Escribe un mensaje..."
+            disabled
+          />
+          <button class="edy-send" id="sendBtn" disabled title="Enviar">➤</button>
+        </div>
+
+        <div class="edy-hint">
+          También puedes usar el micrófono 🎙️
         </div>
       </div>
     `;
   }
 
   attachEventListeners() {
-    const button = this.shadowRoot.querySelector('.edy-button');
-    const closeBtn = this.shadowRoot.querySelector('.edy-close');
-    const modal = this.shadowRoot.querySelector('.edy-modal');
-    const input = this.shadowRoot.querySelector('.edy-input');
-    const sendBtn = this.shadowRoot.querySelector('.edy-send');
+    const fab = this.shadowRoot.querySelector(".edy-fab");
+    const closeBtn = this.shadowRoot.querySelector(".edy-close");
+    const container = this.shadowRoot.querySelector(".edy-container");
+    const input = this.shadowRoot.querySelector("#textInput");
+    const sendBtn = this.shadowRoot.querySelector("#sendBtn");
 
-    button.addEventListener('click', () => {
-      modal.classList.toggle('open');
-      if (modal.classList.contains('open')) {
-        this.initializeConnection();
+    fab.addEventListener("click", () => {
+      container.classList.toggle("open");
+      fab.classList.toggle("hidden", container.classList.contains("open"));
+      if (container.classList.contains("open") && !this.connected) {
+        this.connect();
       }
     });
 
-    closeBtn.addEventListener('click', () => {
-      modal.classList.remove('open');
-      if (this.room) {
-        this.room.disconnect();
+    closeBtn.addEventListener("click", () => {
+      container.classList.remove("open");
+      fab.classList.remove("hidden");
+      this.disconnect();
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && input.value.trim()) {
+        e.preventDefault();
+        this.sendText(input.value);
+        input.value = "";
       }
     });
 
-    input.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && input.value.trim()) {
-        this.sendMessage(input.value);
-        input.value = '';
-      }
-    });
-
-    sendBtn.addEventListener('click', () => {
+    sendBtn.addEventListener("click", () => {
       if (input.value.trim()) {
-        this.sendMessage(input.value);
-        input.value = '';
+        this.sendText(input.value);
+        input.value = "";
       }
     });
   }
 
-  async initializeConnection() {
-    const status = this.shadowRoot.querySelector('.edy-status');
-    const input = this.shadowRoot.querySelector('.edy-input');
-    const sendBtn = this.shadowRoot.querySelector('.edy-send');
+  addMessage(role, text) {
+    const content = this.shadowRoot.querySelector("#content");
+    const msg = document.createElement("div");
+    msg.className = `edy-msg ${role === "user" ? "user" : "agent"}`;
+
+    const sender = document.createElement("div");
+    sender.className = "sender";
+    sender.textContent = role === "user" ? "Tú" : "Edy";
+
+    const body = document.createElement("p");
+    body.textContent = text;
+
+    msg.appendChild(sender);
+    msg.appendChild(body);
+    content.appendChild(msg);
+    content.scrollTop = content.scrollHeight;
+
+    // Guardar en transcript
+    this.transcript.push({ role, text, time: Date.now() });
+  }
+
+  setError(text) {
+    const content = this.shadowRoot.querySelector("#content");
+    const msg = document.createElement("div");
+    msg.className = "edy-msg error";
+    msg.textContent = text;
+    content.appendChild(msg);
+  }
+
+  setStatus(text, state) {
+    const bar = this.shadowRoot.querySelector("#statusBar");
+    const dot = this.shadowRoot.querySelector("#statusDot");
+    bar.textContent = text;
+    bar.className = `edy-status ${state || ""}`;
+    dot.className = `edy-status-dot ${state || ""}`;
+  }
+
+  setEnabled(enabled) {
+    const input = this.shadowRoot.querySelector("#textInput");
+    const sendBtn = this.shadowRoot.querySelector("#sendBtn");
+    input.disabled = !enabled;
+    sendBtn.disabled = !enabled;
+  }
+
+  async connect() {
+    if (this.room && this.connected) return;
 
     try {
-      status.textContent = 'Conectando a Edy...';
-      status.className = 'edy-status';
+      this.setStatus("Conectando...", "connecting");
 
-      // Aquí iría la lógica real de conexión LiveKit
-      // Por ahora, simulamos con un mensaje
-      this.addMessage('Hola 👋 Soy Edy, tu asistente de cursos. ¿En qué puedo ayudarte hoy?', 'edy');
+      // Cargar livekit-client si no está disponible globalmente
+      if (typeof LivekitClient === "undefined") {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.js";
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
 
-      status.textContent = 'Conectado';
-      status.className = 'edy-status connected';
+      // Obtener token
+      const resp = await fetch(this.apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room: this.roomName, studentId: this.studentId || undefined }),
+      });
 
-      input.disabled = false;
-      sendBtn.disabled = false;
-    } catch (error) {
-      status.textContent = `Error: ${error.message}`;
-      status.className = 'edy-status error';
-      this.addMessage('No pude conectar con Edy. Intenta de nuevo.', 'error');
+      if (!resp.ok) {
+        throw new Error(`Token error: ${resp.status}`);
+      }
+
+      const { token } = await resp.json();
+
+      // Crear sala
+      const r = new LivekitClient.Room({
+        adaptiveStream: true,
+        dynacast: true,
+      });
+
+      this.room = r;
+
+      // Escuchar mensajes del agente por data channel
+      r.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
+        try {
+          const data = JSON.parse(new TextDecoder().decode(payload));
+          if (data.type === "agent_speech" && data.text) {
+            this.addMessage("agent", data.text);
+          }
+        } catch (e) {
+          // Ignorar paquetes que no son JSON válido
+        }
+      });
+
+      // Audio del agente
+      r.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+        if (track.kind === LivekitClient.Track.Kind.Audio) {
+          if (!this.audioEl) {
+            this.audioEl = document.createElement("audio");
+            this.audioEl.autoplay = true;
+            this.audioEl.style.display = "none";
+            document.body.appendChild(this.audioEl);
+          }
+          track.attach(this.audioEl);
+          this.audioEl.play().catch(() => {});
+        }
+      });
+
+      r.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+        if (track.kind === LivekitClient.Track.Kind.Audio && this.audioEl) {
+          track.detach(this.audioEl);
+        }
+      });
+
+      // Estado de speakers
+      r.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        const isAgentSpeaking = speakers.some(
+          (s) => s.identity !== r.localParticipant.identity
+        );
+        if (isAgentSpeaking) {
+          this.setStatus("Edy hablando...", "speaking");
+        } else if (this.connected) {
+          this.setStatus("Conectado", "connected");
+        }
+      });
+
+      r.on(LivekitClient.RoomEvent.Disconnected, () => {
+        this.connected = false;
+        this.setStatus("Desconectado", "");
+        this.setEnabled(false);
+      });
+
+      r.on(LivekitClient.RoomEvent.ParticipantConnected, (p) => {
+        console.log("[EdyWidget] Agent connected:", p.identity);
+      });
+
+      // Conectar
+      await r.connect(this.roomName ? `wss://${new URL(this.livekitUrl).host}` : this.livekitUrl, token);
+
+      // Publicar micrófono
+      const tracks = await LivekitClient.createLocalTracks({ audio: true, video: false });
+      for (const track of tracks) {
+        await r.localParticipant.publishTrack(track);
+      }
+
+      this.connected = true;
+      this.setStatus("Conectado", "connected");
+      this.setEnabled(true);
+      this.addMessage("agent", "Hola, soy Edy. ¿En qué puedo ayudarle hoy?");
+
+    } catch (err) {
+      console.error("[EdyWidget] Connection error:", err);
+      this.setStatus("Error de conexión", "");
+      this.setError(`No pude conectar: ${err.message}`);
     }
   }
 
-  sendMessage(text) {
-    this.addMessage(text, 'user');
-    // Aquí iría la lógica de enviar al agente
-    // Por ahora simulamos respuesta
-    setTimeout(() => {
-      this.addMessage(`Entendido: "${text}". Estoy buscando cursos para ti...`, 'edy');
-    }, 500);
+  async sendText(text) {
+    const trimmed = text.trim();
+    if (!trimmed || !this.room || !this.connected) return;
+
+    // Mostrar en chat
+    this.addMessage("user", trimmed);
+
+    // Enviar usando sendText con topic "lk.chat" — el SDK del agente
+    // escucha este topic nativamente y procesa el mensaje correctamente
+    try {
+      await this.room.localParticipant.sendText(trimmed, { topic: "lk.chat" });
+      console.log("[EdyWidget] Text sent via lk.chat:", trimmed);
+    } catch (err) {
+      console.error("[EdyWidget] sendText failed, trying publishData:", err);
+      // Fallback
+      try {
+        const payload = JSON.stringify({ type: "user_text", text: trimmed });
+        await this.room.localParticipant.publishData(payload, { reliable: true });
+      } catch (e) {
+        console.error("[EdyWidget] Fallback also failed:", e);
+      }
+    }
   }
 
-  addMessage(text, sender) {
-    const content = this.shadowRoot.querySelector('.edy-content');
-    const msg = document.createElement('div');
-    msg.className = `edy-message ${sender}`;
-    msg.textContent = text;
-    content.appendChild(msg);
-    content.scrollTop = content.scrollHeight;
+  disconnect() {
+    if (this.room) {
+      this.room.disconnect();
+      this.room = null;
+    }
+    if (this.audioEl) {
+      this.audioEl.srcObject = null;
+    }
+    this.connected = false;
+    this.setStatus("Desconectado", "");
+    this.setEnabled(false);
   }
 }
 
 // Registrar el Web Component
-customElements.define('edy-voice-widget', EdyVoiceWidget);
+customElements.define("edy-voice-widget", EdyVoiceWidget);

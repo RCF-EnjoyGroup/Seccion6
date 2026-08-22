@@ -19,7 +19,6 @@ from livekit.agents import (
 )
 from livekit.plugins import openai, silero
 from livekit.plugins.deepgram import STT as DeepgramSTT
-from livekit.plugins.elevenlabs import TTS as ElevenLabsTTS
 from livekit import rtc
 from livekit.agents.utils import http_context
 
@@ -33,7 +32,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 log = logging.getLogger("edy")
-# Ver qué pasa dentro del pipeline del agente
 logging.getLogger("livekit.agents").setLevel(logging.DEBUG)
 
 
@@ -65,17 +63,8 @@ class EdyAgent(Agent):
 
 
 async def entrypoint(ctx: JobContext) -> None:
-    """LiveKit Agents entrypoint.
-
-    LiveKit Cloud invoca esta función cuando el frontend pide un
-    CreateAgentDispatch con agent_name="edy". El worker registro el
-    agente con nombre "edy" (WorkerOptions.agent_name), por lo que
-    LiveKit Cloud sabe a quién despachar a la sala.
-    """
     ctx.log_context_fields = {"room": ctx.room.name}
 
-    # Conectar a la sala creada por el dispatch; suscripción automática de audio.
-    # Los permisos de publicación los define WorkerPermissions en WorkerOptions.
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
     room = ctx.room
     log.info(f"Agent joined room: {room.name}")
@@ -108,29 +97,45 @@ async def entrypoint(ctx: JobContext) -> None:
             api_key=os.getenv("DEEPGRAM_API_KEY"),
         )
 
-        # Voz femenina en español (Alice - Clear, Engaging Educator, premade).
-        # eleven_turbo_v2_5 es multilingüe; con language="es" Lee español natural.
-        tts = ElevenLabsTTS(
-            voice_id=os.getenv("ELEVEN_VOICE_ID", "Xb7hH8MSUJpSbSDYk0k2"),
-            model="eleven_turbo_v2_5",
-            api_key=os.getenv("ELEVEN_API_KEY"),
-            language="es",
+        # ElevenLabs TTS con manejo de errores
+        eleven_api_key = os.getenv("ELEVEN_API_KEY")
+        eleven_voice_id = os.getenv("ELEVEN_VOICE_ID", "Xb7hH8MSUJpSbSDYk0k2")
+
+        tts = None
+        if eleven_api_key:
+            try:
+                from livekit.plugins.elevenlabs import TTS as ElevenLabsTTS
+                tts = ElevenLabsTTS(
+                    voice_id=eleven_voice_id,
+                    model="eleven_turbo_v2_5",
+                    api_key=eleven_api_key,
+                )
+                log.info("ElevenLabs TTS initialized successfully")
+            except Exception as e:
+                log.warning(f"Failed to initialize ElevenLabs TTS: {e}")
+                tts = None
+        else:
+            log.warning("ELEVEN_API_KEY not set, running without TTS (text-only mode)")
+
+        llm = openai.LLM(
+            model=os.getenv("NVIDIA_LLM_MODEL", "openai/gpt-oss-20b"),
+            api_key=os.getenv("NVIDIA_API_KEY"),
+            base_url=os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+            max_completion_tokens=500,
+            temperature=0.3,
+            top_p=0.9,
+            _strict_tool_schema=False,
         )
 
-        agent_session = AgentSession(
+        session_kwargs = dict(
             vad=silero.VAD.load(),
             stt=stt,
-            llm=openai.LLM(
-                model=os.getenv("NVIDIA_LLM_MODEL", "openai/gpt-oss-20b"),
-                api_key=os.getenv("NVIDIA_API_KEY"),
-                base_url=os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
-                max_completion_tokens=500,
-                temperature=0.3,
-                top_p=0.9,
-                _strict_tool_schema=False,
-            ),
-            tts=tts,
+            llm=llm,
         )
+        if tts:
+            session_kwargs["tts"] = tts
+
+        agent_session = AgentSession(**session_kwargs)
 
         await agent_session.start(
             agent=agent,
