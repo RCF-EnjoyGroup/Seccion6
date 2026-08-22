@@ -50,6 +50,22 @@ def build_tool_functions(session: StudentSession, backend: BackendClient) -> lis
         }
 
     @function_tool
+    async def search_courses(query: str, limit: int = 10) -> dict:
+        """Busca cursos por palabra clave (ej: 'python', 'javascript', 'data science'). Usa búsqueda semántica y fallback de texto."""
+        try:
+            results = await backend.get("/courses/search", params={"q": query, "limit": limit})
+            courses = results.get("results", []) if isinstance(results, dict) else []
+        except Exception as exc:
+            return _wrap_http_error(exc)
+        _track_recommendations(session, [c.get("id") for c in courses if isinstance(c, dict) and "id" in c])
+        return {
+            "courses": courses,
+            "count": len(courses),
+            "query": query,
+            "recommendations_used": session.recommendations_count,
+        }
+
+    @function_tool
     async def get_course_detail(course_id: str) -> dict:
         """Devuelve detalle completo de un curso (instructor, descripción, etc.)."""
         try:
@@ -173,6 +189,7 @@ def build_tool_functions(session: StudentSession, backend: BackendClient) -> lis
 
     return [
         get_courses,
+        search_courses,
         get_course_detail,
         get_course_lessons,
         enroll_student,
