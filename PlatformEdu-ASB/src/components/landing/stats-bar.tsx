@@ -59,18 +59,31 @@ function AnimatedNumber({ value, suffix }: { value: number; suffix: string }) {
 
 export function StatsBar() {
   return (
-    <section className="border-y bg-muted/30">
-      <div className="mx-auto max-w-7xl px-4 py-10">
+    <section className="relative overflow-hidden border-y bg-gradient-to-b from-muted/50 via-background to-muted/30">
+      {/* Decorative blurs */}
+      <div className="absolute top-0 left-1/4 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-48 h-48 bg-primary/3 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="relative mx-auto max-w-7xl px-4 py-12">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-          {STATS.map((stat) => (
-            <div key={stat.label} className="flex flex-col items-center text-center gap-2">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+          {STATS.map((stat, i) => (
+            <div
+              key={stat.label}
+              className="flex flex-col items-center text-center gap-3 group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors shadow-sm">
                 <stat.icon className="w-5 h-5 text-primary" />
               </div>
-              <div className="text-2xl font-bold text-foreground">
+              <div className="text-3xl font-extrabold text-foreground tracking-tight">
                 <AnimatedNumber value={stat.value} suffix={stat.suffix} />
               </div>
-              <div className="text-sm text-muted-foreground">{stat.label}</div>
+              <div className="text-sm text-muted-foreground font-medium">
+                {stat.label}
+              </div>
+              {/* Subtle divider between stats on desktop */}
+              {i < STATS.length - 1 && (
+                <div className="hidden lg:block absolute" />
+              )}
             </div>
           ))}
         </div>

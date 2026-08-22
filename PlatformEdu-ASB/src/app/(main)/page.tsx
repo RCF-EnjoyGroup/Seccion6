@@ -6,8 +6,13 @@ import { CourseCard } from "@/components/courses/course-card";
 import { getCategoriesWithCounts, getFeaturedCourses } from "@/lib/queries/courses";
 import { LiveSimulator } from "@/components/landing/live-simulator";
 import { StatsBar } from "@/components/landing/stats-bar";
-import { FeaturesSection } from "@/components/landing/features-section";
 import { EdyCta } from "@/components/landing/edy-cta";
+import { TrustedBy } from "@/components/landing/trusted-by";
+import { HowItWorks } from "@/components/landing/how-it-works";
+import { TestimonialsSection } from "@/components/landing/testimonials-section";
+import { FaqSection } from "@/components/landing/faq-section";
+import { FeaturesSection } from "@/components/landing/features-section";
+import { HeroSection } from "@/components/landing/hero-section";
 
 export default async function HomePage() {
   const [featuredCourses, categories] = await Promise.all([
@@ -18,50 +23,16 @@ export default async function HomePage() {
   return (
     <div>
       {/* ── Hero ───────────────────────────────────────────── */}
-      <section className="relative overflow-hidden border-b bg-background text-foreground py-20 lg:py-28">
-        {/* Ambient glow */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_0%,var(--primary)_0%,transparent_70%)] opacity-15 pointer-events-none" />
-        {/* Secondary glow */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      <HeroSection />
 
-        <div className="relative mx-auto max-w-7xl px-4 flex flex-col items-center text-center space-y-10">
-          <div className="space-y-6 max-w-3xl">
-            {/* Eyebrow */}
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-xs font-mono font-medium text-primary tracking-wide uppercase">
-              <Sparkles className="w-3 h-3" />
-              Plataforma de Aprendizaje con IA
-            </span>
-
-            {/* Headline */}
-            <h1 className="text-4xl font-extrabold tracking-tight font-heading text-balance sm:text-6xl lg:text-7xl bg-gradient-to-b from-foreground via-foreground to-foreground/40 bg-clip-text text-transparent">
-              Domina las habilidades del futuro con clases interactivas
-            </h1>
-
-            {/* Subtitle */}
-            <p className="mx-auto max-w-xl text-md sm:text-lg text-muted-foreground text-balance leading-relaxed">
-              Descubre cursos premium creados por expertos en desarrollo, diseño, IA y
-              negocios. Reproductor de última generación, quizzes integrados y
-              certificaciones automáticas.
-            </p>
-
-            {/* CTAs */}
-            <div className="pt-2 flex justify-center items-center gap-4 flex-wrap">
-              <Button size="lg" nativeButton={false} render={<Link href="/cursos"><span className="flex items-center gap-2">Explorar Cursos <ArrowRight className="w-4 h-4" /></span></Link>} />
-              <Button size="lg" variant="outline" nativeButton={false} render={
-                <Link href="/signup">Enseñar en EduPlatform</Link>
-              } />
-            </div>
-          </div>
-
-          {/* Live Simulator */}
-          <div className="w-full pt-4">
-            <LiveSimulator />
-          </div>
-        </div>
-      </section>
+      {/* ── Trusted By ─────────────────────────────────────── */}
+      <TrustedBy />
 
       {/* ── Stats ──────────────────────────────────────────── */}
       <StatsBar />
+
+      {/* ── How It Works ───────────────────────────────────── */}
+      <HowItWorks />
 
       {/* ── Categories ─────────────────────────────────────── */}
       {categories.length > 0 && (
@@ -85,7 +56,7 @@ export default async function HomePage() {
               <Link
                 key={category}
                 href={`/cursos?category=${encodeURIComponent(category)}`}
-                className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium transition-all hover:border-primary/30 hover:bg-primary/5 hover:shadow-sm"
+                className="group flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium transition-all duration-300 hover:border-primary/30 hover:bg-primary/5 hover:shadow-md hover:-translate-y-0.5"
               >
                 <span className="text-foreground group-hover:text-primary transition-colors">
                   {category}
@@ -134,8 +105,14 @@ export default async function HomePage() {
       {/* ── Features ────────────────────────────────────────── */}
       <FeaturesSection />
 
+      {/* ── Testimonials ────────────────────────────────────── */}
+      <TestimonialsSection />
+
       {/* ── Edy CTA ────────────────────────────────────────── */}
       <EdyCta />
+
+      {/* ── FAQ ────────────────────────────────────────────── */}
+      <FaqSection />
     </div>
   );
 }
