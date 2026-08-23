@@ -8,18 +8,21 @@ echo ========================================
 echo.
 
 echo [1/2] Starting Python Agent (Edy)...
-start "Edy Agent" cmd /k "
+if exist "Edtech-agent\venv\Scripts\python.exe" (
     cd /d "%~dp0Edtech-agent"
-    echo Starting agent...
-    if exist venv\Scripts\python.exe (venv\Scripts\python.exe main.py dev) else (python main.py dev)
-"
+    start "Edy Agent" cmd /k "venv\Scripts\python.exe main.py dev"
+    cd /d "%~dp0"
+) else (
+    cd /d "%~dp0Edtech-agent"
+    start "Edy Agent" cmd /k "python main.py dev"
+    cd /d "%~dp0"
+)
 
 echo.
 echo [2/2] Starting Next.js Frontend...
-start "Next.js Frontend" cmd /k "
-    cd /d "%~dp0PlatformEdu-ASB"
-    npm run dev
-"
+cd /d "%~dp0PlatformEdu-ASB"
+start "Next.js Frontend" cmd /k "npm run dev"
+cd /d "%~dp0"
 
 echo.
 echo ========================================

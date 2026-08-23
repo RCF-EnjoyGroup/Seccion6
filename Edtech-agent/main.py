@@ -19,6 +19,7 @@ from livekit.agents import (
 )
 from livekit.plugins import openai, silero
 from livekit.plugins.deepgram import STT as DeepgramSTT
+from edge_tts_adapter import EdgeTTS
 from livekit import rtc
 from livekit.agents.utils import http_context
 
@@ -97,25 +98,13 @@ async def entrypoint(ctx: JobContext) -> None:
             api_key=os.getenv("DEEPGRAM_API_KEY"),
         )
 
-        # ElevenLabs TTS con manejo de errores
-        eleven_api_key = os.getenv("ELEVEN_API_KEY")
-        eleven_voice_id = os.getenv("ELEVEN_VOICE_ID", "Xb7hH8MSUJpSbSDYk0k2")
-
-        tts = None
-        if eleven_api_key:
-            try:
-                from livekit.plugins.elevenlabs import TTS as ElevenLabsTTS
-                tts = ElevenLabsTTS(
-                    voice_id=eleven_voice_id,
-                    model="eleven_turbo_v2_5",
-                    api_key=eleven_api_key,
-                )
-                log.info("ElevenLabs TTS initialized successfully")
-            except Exception as e:
-                log.warning(f"Failed to initialize ElevenLabs TTS: {e}")
-                tts = None
-        else:
-            log.warning("ELEVEN_API_KEY not set, running without TTS (text-only mode)")
+        # Edge TTS — voz masculina latina (gratuito, sin API key)
+        edge_voice = os.getenv("EDGE_TTS_VOICE", "es-CO-GonzaloNeural")
+        tts = EdgeTTS(
+            voice=edge_voice,
+            rate="+10%",  # velocidad ligeramente más rápida
+        )
+        log.info(f"Edge TTS initialized — voice: {edge_voice}")
 
         llm = openai.LLM(
             model=os.getenv("NVIDIA_LLM_MODEL", "openai/gpt-oss-20b"),
@@ -131,9 +120,8 @@ async def entrypoint(ctx: JobContext) -> None:
             vad=silero.VAD.load(),
             stt=stt,
             llm=llm,
+            tts=tts,
         )
-        if tts:
-            session_kwargs["tts"] = tts
 
         agent_session = AgentSession(**session_kwargs)
 
