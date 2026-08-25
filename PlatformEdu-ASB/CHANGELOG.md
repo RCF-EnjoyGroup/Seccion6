@@ -23,4 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualizado `docs/README.md` para reflejar completitud de fixes
 - Agregado Changelog
 
+## [1.2.0] - 2026-08-24
+
+### Added - CI/CD Pipeline
+
+- **CI-001**: Creado `.github/workflows/ci.yml` con pipeline de 5 gates de calidad:
+  - Gate 1: ESLint + TypeScript check
+  - Gate 2: Unit tests (Vitest)
+  - Gate 3: Integration tests (Vitest)
+  - Gate 4: Build de producción (Next.js)
+  - Gate 5: Deploy automático a Vercel (solo en `main`/`master`)
+- **CI-002**: Preview automático en Vercel para Pull Requests con URL comentada en el PR
+- **CI-003**: Concurrency group para cancelar workflows redundantes
+- **CI-004**: Documentación de CI/CD en README.md
+
 ## [Unreleased]

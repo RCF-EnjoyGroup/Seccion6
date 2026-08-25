@@ -1,0 +1,172 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Gate 1: Lint + Type Check
+  # ──────────────────────────────────────────────
+  lint:
+    name: "Gate 1 - Lint & Type Check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: PlatformEdu-ASB/package-lock.json
+
+      - name: Install dependencies
+        working-directory: PlatformEdu-ASB
+        run: npm ci
+
+      - name: ESLint
+        working-directory: PlatformEdu-ASB
+        run: npm run lint
+
+      - name: TypeScript check
+        working-directory: PlatformEdu-ASB
+        run: npx tsc --noEmit
+
+  # ──────────────────────────────────────────────
+  # Gate 2: Unit Tests
+  # ──────────────────────────────────────────────
+  unit-tests:
+    name: "Gate 2 - Unit Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: PlatformEdu-ASB/package-lock.json
+
+      - name: Install dependencies
+        working-directory: PlatformEdu-ASB
+        run: npm ci
+
+      - name: Run unit tests
+        working-directory: PlatformEdu-ASB
+        run: npm run test:unit
+
+  # ──────────────────────────────────────────────
+  # Gate 3: Integration Tests
+  # ──────────────────────────────────────────────
+  integration-tests:
+    name: "Gate 3 - Integration Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: PlatformEdu-ASB/package-lock.json
+
+      - name: Install dependencies
+        working-directory: PlatformEdu-ASB
+        run: npm ci
+
+      - name: Run integration tests
+        working-directory: PlatformEdu-ASB
+        run: npm run test:integration
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+
+  # ──────────────────────────────────────────────
+  # Gate 4: Build
+  # ──────────────────────────────────────────────
+  build:
+    name: "Gate 4 - Production Build"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: PlatformEdu-ASB/package-lock.json
+
+      - name: Install dependencies
+        working-directory: PlatformEdu-ASB
+        run: npm ci
+
+      - name: Build
+        working-directory: PlatformEdu-ASB
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.TEST_STRIPE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
+  # ──────────────────────────────────────────────
+  # Gate 5: Deploy to Vercel (solo en main)
+  # ──────────────────────────────────────────────
+  deploy:
+    name: "Gate 5 - Deploy to Vercel"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, integration-tests, build]
+    if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel (production)
+        id: deploy
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: "--prod"
+          working-directory: PlatformEdu-ASB
+
+  # ──────────────────────────────────────────────
+  # Preview Deploy (PRs)
+  # ──────────────────────────────────────────────
+  deploy-preview:
+    name: "Preview Deploy"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel (preview)
+        id: preview
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: PlatformEdu-ASB
+
+      - name: Comment PR with preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 **Preview desplegado:** ${{ steps.preview.outputs.preview-url }}`
+            })

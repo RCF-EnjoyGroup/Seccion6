@@ -94,6 +94,53 @@ src/
   types/database.ts        Tipos TypeScript del esquema de base de datos
 ```
 
+## CI/CD Pipeline
+
+El proyecto incluye un pipeline de integración continua y despliegue continuo configurado en `.github/workflows/ci.yml`. Cada push o Pull Request dispara automáticamente 5 gates de calidad:
+
+| Gate | Descripción | Bloquea deploy |
+|------|-------------|----------------|
+| **Gate 1** | ESLint + TypeScript check | Sí |
+| **Gate 2** | Unit tests (Vitest) | Sí |
+| **Gate 3** | Integration tests (Vitest) | Sí |
+| **Gate 4** | Build de producción (Next.js) | Sí |
+| **Gate 5** | Deploy a Vercel (solo `main`) | Sí |
+
+### Flujo
+
+```
+Push/PR → Gate 1 (Lint) ──┐
+                          ├──→ Gate 4 (Build) ──→ Gate 5 (Deploy Vercel)
+            Gate 2 (Unit) ─┘         ↑
+            Gate 3 (Integration) ────┘
+```
+
+- **Pull Requests**: Se ejecutan los gates 1-3. Si pasan, se despliega un preview automáticamente en Vercel con la URL comentada en el PR.
+- **Push a main**: Se ejecutan todos los gates. Solo si todos aprueban, se despliega a producción en Vercel.
+
+### Secrets requeridos en GitHub
+
+Configura estos secrets en **Settings > Secrets and variables > Actions**:
+
+| Secret | Descripción |
+|--------|-------------|
+| `VERCEL_TOKEN` | Token de Vercel (Settings > Tokens) |
+| `VERCEL_ORG_ID` | ID de tu organización en Vercel (`.vercel/project.json`) |
+| `VERCEL_PROJECT_ID` | ID del proyecto en Vercel (`.vercel/project.json`) |
+| `TEST_SUPABASE_URL` | URL de Supabase para tests de integración |
+| `TEST_SUPABASE_ANON_KEY` | Anon key de Supabase para tests |
+| `TEST_SUPABASE_SERVICE_ROLE_KEY` | Service role key para tests |
+
+### Despliegue manual
+
+```bash
+# Desplegar preview (desarrollo)
+npx vercel
+
+# Desplegar a producción
+npx vercel --prod
+```
+
 ## Notas de seguridad
 
 - Row Level Security está habilitado en todas las tablas con datos sensibles. Las tablas `enrollments`, `transactions` y `certificates` solo aceptan `INSERT` desde el backend (service role), nunca desde el cliente.
