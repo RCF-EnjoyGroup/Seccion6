@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Test files with @ts-nocheck
+    "src/**/*.integration.test.ts",
+    "tests/e2e/**",
   ]),
 ]);
 
